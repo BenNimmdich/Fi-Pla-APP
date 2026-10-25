@@ -26,7 +26,7 @@
 //# sourceMappingURL=chart.umd.js.map
 </script>
 <style>
-:root{--bg:#f8fafc;--card:#fff;--border:#e2e8f0;--text:#1e293b;--muted:#64748b;--light:#94a3b8;--primary:#3b82f6;--primaryHover:#2563eb;--primaryBg:rgba(59,130,246,.08);--danger:#ef4444;--dangerBg:rgba(239,68,68,.08);--success:#10b981;--successBg:rgba(16,185,129,.08);--radius:10px;--shadow:0 1px 3px rgba(0,0,0,.08)}
+:root{--bg:#f8fafc;--card:#fff;--border:#e2e8f0;--text:#1e293b;--muted:#64748b;--light:#94a3b8;--primary:#3b82f6;--primaryHover:#2563eb;--primaryBg:rgba(59,130,246,.08);--danger:#ef4444;--dangerBg:rgba(239,68,68,.08);--success:#10b981;--radius:10px;--shadow:0 1px 3px rgba(0,0,0,.08)}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text);line-height:1.5;font-size:14px}
 .container{max-width:1200px;margin:0 auto;padding:0 16px}
@@ -76,8 +76,6 @@ tr:hover td{background:#f8fafc}
 .btn-primary:hover{background:var(--primaryHover)}
 .btn-outline{background:var(--primaryBg);color:var(--primary)}
 .btn-outline:hover{background:rgba(59,130,246,.15)}
-.btn-success{background:var(--successBg);color:var(--success)}
-.btn-success:hover{background:rgba(16,185,129,.15)}
 .btn-danger{background:var(--dangerBg);color:var(--danger);padding:5px 8px}
 .btn-danger:hover{background:rgba(239,68,68,.15)}
 .btn-sm{padding:4px 10px;font-size:.78rem}
@@ -202,7 +200,14 @@ input[type=color]{width:38px;height:34px;padding:2px;border:1px solid var(--bord
       <div class="card"><div class="section-title">🔄 Verteilung nach Zahlungsintervall</div><div class="chart-fix" style="height:280px"><canvas id="c-pie-interv"></canvas></div></div>
       <div class="card"><div class="section-title">💳 Empfohlener monatlicher Überweisungsbetrag pro Konto</div><div id="dash-konto-table"></div></div>
     </div>
-    <div class="section"><div class="section-title">📈 Rollierende Kontostand-Planung (nur unregelmäßige Kosten)</div><div class="card"><p style="color:var(--muted);font-size:.8rem;margin-bottom:10px">Rücklage für unregelmäßige Kosten (2-monatlich, quartalsweise, halbjährlich, jährlich). Monatliche Kosten werden direkt bezahlt.</p><div class="chart-fix" style="height:320px"><canvas id="c-stand"></canvas></div></div></div>
+    <div class="section"><div class="section-title">📈 Rollierende Kontostand-Planung (nur unregelmäßige Kosten)</div><div class="card">
+      <p style="color:var(--muted);font-size:.8rem;margin-bottom:10px">Rücklage für unregelmäßige Kosten (2-monatlich, quartalsweise, halbjährlich, jährlich). Die Balken zeigen die in jedem Monat tatsächlich fälligen Beträge (nach den hinterlegten Fälligkeitsmonaten), die Linie den Stand der Rücklage. Monatliche Kosten werden direkt bezahlt.</p>
+      <div class="chart-controls" id="stand-ctl"></div>
+      <div class="chart-fix" style="height:340px"><canvas id="c-stand"></canvas></div>
+      <div class="kat-chips" id="stand-legend"></div>
+      <div class="chart-note" id="stand-note"></div>
+      <div id="stand-detail" style="overflow-x:auto;margin-top:14px"></div>
+    </div></div>
   </div>
 
   <!-- ALLE KOSTEN -->
@@ -232,23 +237,28 @@ input[type=color]{width:38px;height:34px;padding:2px;border:1px solid var(--bord
 </div>
 
 <div id="toast" class="toast"></div>
+<input type="file" id="csv-file" tabindex="-1" aria-hidden="true" style="position:fixed;left:-9999px;top:0;width:1px;height:1px;opacity:0" onchange="onCsvFileChosen(this)">
 
 <script>
 // ========== DATEN: alles Variable liegt in der CSV-Datei neben dieser HTML ==========
 // Posten, Stammdaten (Kategorie/Konto/Zahlart/Status inkl. Farben) und Einstellungen
 // werden beim Verbinden aus der CSV gelesen und mit "Speichern" dorthin zurueckgeschrieben.
 // localStorage dient ausschliesslich als Absturzsicherung fuer ungespeicherte Aenderungen.
+const APP_VERSION = '2026-10-25.11';
 const CSV_NAME = 'Finanzplanung_Daten.csv';
 const CACHE_KEY = 'finanzplanung_cache';
 const DEFAULT_LOOKUPS = [{"id":1,"type":"kategorie","name":"Wohnen","color":"#60B5FF","sortOrder":0},{"id":21,"type":"status","name":"aktiv","color":"#60B5FF","sortOrder":0},{"id":8,"type":"konto","name":"C24 fix mtl.","color":"#60B5FF","sortOrder":0},{"id":18,"type":"zahlart","name":"Konto","color":"#60B5FF","sortOrder":0},{"id":22,"type":"status","name":"inaktiv","color":"#FF9149","sortOrder":1},{"id":19,"type":"zahlart","name":"Apple","color":"#FF9149","sortOrder":1},{"id":2,"type":"kategorie","name":"Versicherung","color":"#FF9149","sortOrder":1},{"id":9,"type":"konto","name":"C24 unregelm","color":"#FF9149","sortOrder":1},{"id":23,"type":"status","name":"geplant","color":"#2A9D8F","sortOrder":2},{"id":10,"type":"konto","name":"C24 Haus","color":"#2A9D8F","sortOrder":2},{"id":3,"type":"kategorie","name":"Sparen","color":"#2A9D8F","sortOrder":2},{"id":20,"type":"zahlart","name":"Paypal","color":"#2A9D8F","sortOrder":2},{"id":24,"type":"status","name":"aktiv-gekündigt","color":"#A19AD3","sortOrder":3},{"id":4,"type":"kategorie","name":"Abo","color":"#A19AD3","sortOrder":3},{"id":11,"type":"konto","name":"C24 Haushalt","color":"#A19AD3","sortOrder":3},{"id":12,"type":"konto","name":"C24 Sonderausgaben","color":"#FF9898","sortOrder":4},{"id":5,"type":"kategorie","name":"Kinder","color":"#FF9898","sortOrder":4},{"id":13,"type":"konto","name":"C 24 was gönnen","color":"#FF90BB","sortOrder":5},{"id":6,"type":"kategorie","name":"Haushalt","color":"#FF90BB","sortOrder":5},{"id":7,"type":"kategorie","name":"Sonstiges","color":"#FF6363","sortOrder":6},{"id":14,"type":"konto","name":"ING","color":"#72BF78","sortOrder":6},{"id":15,"type":"konto","name":"ING (später)","color":"#B5D99C","sortOrder":7},{"id":16,"type":"konto","name":"Gemeinschaft","color":"#FF6363","sortOrder":8},{"id":17,"type":"konto","name":"Unbekannt","color":"#80D8C3","sortOrder":9}];
-const DEFAULT_SETTINGS = { mtlStatuses: ['aktiv', 'aktiv-gekündigt'] };
+const DEFAULT_STATUS = ['aktiv', 'aktiv-gekündigt'];
+const DEFAULT_SETTINGS = { mtlStatuses: DEFAULT_STATUS };
+const NEUTRAL_COLOR = '#94a3b8';
+const clone = o => JSON.parse(JSON.stringify(o));
 const LOOKUP_TYPES = ['kategorie', 'konto', 'zahlart', 'status'];
 let NEXT_ID = 1;
 let NEXT_LOOKUP_ID = 1;
 let DATA = [];
-let LOOKUPS = JSON.parse(JSON.stringify(DEFAULT_LOOKUPS));
-let SETTINGS = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
-let CSV_LOADED = false, DIRTY = false, CSV_FILE_NAME = null, CSV_LOADED_AT = null;
+let LOOKUPS = clone(DEFAULT_LOOKUPS);
+let SETTINGS = clone(DEFAULT_SETTINGS);
+let CSV_LOADED = false, LOADED_COUNT = 0, DIRTY = false, CSV_FILE_NAME = null, CSV_LOADED_AT = null;
 let csvHandle = null;
 
 function lsGet(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } }
@@ -261,9 +271,6 @@ function markDirty() {
   updateSaveButton();
 }
 function markClean() { DIRTY = false; lsDel(CACHE_KEY); updateSaveButton(); }
-function saveItems() { markDirty(); }
-function saveLookups() { markDirty(); }
-function saveSettings() { markDirty(); }
 function recalcIds() {
   NEXT_ID = Math.max(0, ...DATA.map(i => i.id || 0)) + 1;
   NEXT_LOOKUP_ID = Math.max(0, ...LOOKUPS.map(l => l.id || 0)) + 1;
@@ -294,8 +301,8 @@ function allStatusValues() {
   return [...new Set([...getLookupNames('status'), ...DATA.map(i => i.status).filter(Boolean)])];
 }
 
-function getIntervallLabel(item) {
-  if ((item.betragMonatlich||0) > 0) return 'Monatlich';
+function getIntervallLabel(item, irregularOnly = false) {
+  if (!irregularOnly && (item.betragMonatlich||0) > 0) return 'Monatlich';
   if ((item.betragAlle2Monate||0) > 0) return 'Alle 2 Monate';
   if ((item.betragQuartal||0) > 0) return 'Quartalsweise';
   if ((item.betragHalbjaehrlich||0) > 0) return 'Halbjährlich';
@@ -304,27 +311,16 @@ function getIntervallLabel(item) {
 }
 const INTERVALL_ORDER = { 'Monatlich':0, 'Alle 2 Monate':1, 'Quartalsweise':2, 'Halbjährlich':3, 'Jährlich':4 };
 function parseFM(item) { try { return JSON.parse(item.faelligkeitsMonate||'[]')||[]; } catch{ return []; } }
-function getActualMonthlyAmount(item, month) {
-  if (!item) return 0;
-  const a = item.anteil ?? 1; let t = (item.betragMonatlich||0)*a;
-  const fm = parseFM(item);
-  [[item.betragJaehrlich,12],[item.betragHalbjaehrlich,6],[item.betragQuartal,3],[item.betragAlle2Monate,2]].forEach(([val,div]) => {
-    if ((val||0) > 0) {
-      if (fm.length > 0 && fm.includes(month)) t += val*a;
-      else if (fm.length === 0) t += (val/div)*a;
-    }
-  });
-  return t;
-}
-function getIrregularMonthlyAmount(item, month) {
-  if (!item) return 0;
-  const a = item.anteil ?? 1; let t = 0;
-  const fm = parseFM(item);
-  [[item.betragJaehrlich,12],[item.betragHalbjaehrlich,6],[item.betragQuartal,3],[item.betragAlle2Monate,2]].forEach(([val,div]) => {
-    if ((val||0) > 0) {
-      if (fm.length > 0 && fm.includes(month)) t += val*a;
-      else if (fm.length === 0) t += (val/div)*a;
-    }
+// Unregelmaessige Anteile eines Postens im Monat (nach Anteil gewichtet): mit Faelligkeitsmonaten voll in
+// genau diesen Monaten, ohne Faelligkeitsmonate gleichmaessig ueber 12 Monate verteilt
+const IRREGULAR_FIELDS = [['betragJaehrlich', 12], ['betragHalbjaehrlich', 6], ['betragQuartal', 3], ['betragAlle2Monate', 2]];
+function irregularAmount(item, month) {
+  const a = anteilOf(item), fm = parseFM(item); let t = 0;
+  IRREGULAR_FIELDS.forEach(([f, div]) => {
+    const val = item[f] || 0;
+    if (val <= 0) return;
+    if (!fm.length) t += (val / div) * a;
+    else if (fm.includes(month)) t += val * a;
   });
   return t;
 }
@@ -334,7 +330,6 @@ function isUnregelmaessig(item) {
 function calcMtlKalk(item) {
   return (item.betragQuartal||0)/3 + (item.betragJaehrlich||0)/12 + (item.betragAlle2Monate||0)/2 + (item.betragHalbjaehrlich||0)/6;
 }
-function calcErgebnisMtl(item) { return ((item.betragMonatlich||0) + calcMtlKalk(item)) * (item.anteil ?? 1); }
 function getRolling12() {
   const now = new Date(), months = [];
   for (let i=0;i<12;i++) { const m=((now.getMonth()+i)%12)+1, y=now.getFullYear()+Math.floor((now.getMonth()+i)/12); months.push({month:m,year:y,label:MONAT_LABELS[m-1]+' '+y}); }
@@ -346,11 +341,12 @@ function statusIncluded(st) { return SETTINGS.mtlStatuses.includes(st); }
 // Ergebnis: voller Monatswert der Position (100 %, ohne Anteil)
 function ergebnisVoll(item) { return (item.betragMonatlich||0) + calcMtlKalk(item); }
 function anteilOf(item) { return (item.anteil ?? 1) === 0.5 ? 0.5 : 1; }
+function ergebnisAnteilig(item) { return ergebnisVoll(item) * anteilOf(item); }
 // mtl.: anteiliger Monatswert, nur wenn der Status in der Admin-Einstellung enthalten ist
-function mtlWert(item) { return statusIncluded(item.status) ? ergebnisVoll(item) * anteilOf(item) : 0; }
+function mtlWert(item) { return statusIncluded(item.status) ? ergebnisAnteilig(item) : 0; }
 // Status-gefilterte Varianten fuer Monatsverlaeufe
-function effActual(item, month) { return statusIncluded(item.status) ? getActualMonthlyAmount(item, month) : 0; }
-function effIrregular(item, month) { return statusIncluded(item.status) ? getIrregularMonthlyAmount(item, month) : 0; }
+function effActual(item, month) { return statusIncluded(item.status) ? (item.betragMonatlich || 0) * anteilOf(item) + irregularAmount(item, month) : 0; }
+function effIrregular(item, month) { return statusIncluded(item.status) ? irregularAmount(item, month) : 0; }
 
 // ========== TOAST ==========
 let toastTimer;
@@ -443,7 +439,6 @@ function parseCsvDb(text) {
         faelligkeitsMonate: JSON.stringify(((o.faelligkeitsmonate || '').match(/\d+/g) || []).map(Number).filter(m => m >= 1 && m <= 12).sort((a, b) => a - b)),
         notfallBetrag: csvNumIn(o.notfallbetrag), zugang: o.zugang || '',
       };
-      e.mtlKalkuliert = calcMtlKalk(e); e.ergebnisMtl = calcErgebnisMtl(e);
       items.push(e);
     });
   }
@@ -457,7 +452,7 @@ function parseCsvDb(text) {
       if (!LOOKUP_TYPES.includes(type) || !name || seen.has(type + '|' + name)) return;
       seen.add(type + '|' + name);
       const so = parseInt(r[3]); cnt[type] = (cnt[type] || 0) + 1;
-      lookups.push({ id: lookups.length + 1, type, name, color: String(r[2] ?? '').trim() || null, sortOrder: isFinite(so) ? so : cnt[type] - 1 });
+      lookups.push({ id: lookups.length + 1, type, name, color: safeColor(r[2]), sortOrder: isFinite(so) ? so : cnt[type] - 1 });
     });
   }
   // Einstellungen
@@ -477,37 +472,52 @@ async function hasPerm(h, ask) {
 }
 
 function loadFromText(text, name) {
+  if (!String(text ?? '').replace(/^\ufeff/, '').trim()) {
+    showToast('Die CSV ist leer – evtl. noch nicht aus iCloud geladen. Bitte kurz warten und erneut wählen.', 'error');
+    return false;
+  }
   let db;
   try { db = parseCsvDb(text); } catch (e) { showToast('CSV ungültig: ' + e.message, 'error'); return false; }
   DATA = db.items;
-  LOOKUPS = db.lookups || JSON.parse(JSON.stringify(DEFAULT_LOOKUPS));
-  SETTINGS = db.settings || JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
+  LOOKUPS = db.lookups || clone(DEFAULT_LOOKUPS);
+  SETTINGS = db.settings || clone(DEFAULT_SETTINGS);
   DIRTY = false;
   const c = lsGet(CACHE_KEY);
   if (c && c.dirty && Array.isArray(c.items) && confirm('Es gibt ungespeicherte Änderungen aus der letzten Sitzung (' + c.items.length + ' Posten).\n\nOK = Änderungen wiederherstellen\nAbbrechen = Stand der CSV verwenden')) {
     DATA = c.items; LOOKUPS = c.lookups || LOOKUPS; SETTINGS = c.settings || SETTINGS; DIRTY = true;
   } else lsDel(CACHE_KEY);
   recalcIds(); syncLookups(); recalcIds();
+  LOADED_COUNT = db.items.length;
   CSV_LOADED = true; CSV_FILE_NAME = name || CSV_NAME; CSV_LOADED_AT = new Date();
   resetViewState();
   document.body.classList.remove('no-data');
   renderCsvUi(); updateSaveButton();
-  navigateTo(currentPage, editingId);
+  try { navigateTo(currentPage, editingId); }
+  catch (e) { console.error(e); showToast('Anzeigefehler nach dem Laden: ' + ((e && e.message) || e), 'error'); return true; }
   showToast((name || CSV_NAME) + ' geladen · ' + DATA.length + ' Posten');
   return true;
 }
 function resetViewState() {
-  dashKontoSel = null; dashKatSel = null; dashPosStatusSel = null;
+  dashKontoSel = null; dashKatSel = null; dashPosStatusSel = null; dashStandKonto = null;
   KCOLS.forEach(c => kostenSel[c.key].clear()); kostenSearch = '';
 }
 async function loadFromHandle(h) {
   const f = await h.getFile();
   return loadFromText(await f.text(), h.name);
 }
+// iOS Safari: Der Datei-Dialog muss ein fest im DOM liegendes <input> verwenden (ein per Skript erzeugtes,
+// nicht eingehaengtes Element liefert dort oft kein change-Ereignis) und darf keine accept-Einschraenkung
+// haben, sonst sind CSV-Dateien aus iCloud Drive ausgegraut.
 function pickCsvViaInput() {
-  const input = document.createElement('input'); input.type = 'file'; input.accept = '.csv,text/csv';
-  input.onchange = async e => { const f = e.target.files[0]; if (f) loadFromText(await f.text(), f.name); };
-  input.click();
+  const inp = document.getElementById('csv-file'); if (!inp) return;
+  inp.value = ''; inp.click();
+}
+async function onCsvFileChosen(inp) {
+  const f = inp.files && inp.files[0]; if (!f) return;
+  showToast('Lese ' + f.name + ' …');
+  try { loadFromText(await f.text(), f.name); }
+  catch (e) { showToast('Datei konnte nicht gelesen werden: ' + ((e && e.message) || e), 'error'); }
+  inp.value = '';
 }
 // Button "CSV verbinden": Chrome/Edge merken sich die Datei, Safari/iOS fragen jedes Mal per Dateiauswahl
 async function connectCsv() {
@@ -533,13 +543,14 @@ async function reloadCsv() {
   connectCsv();
 }
 function startEmpty() {
-  DATA = []; LOOKUPS = JSON.parse(JSON.stringify(DEFAULT_LOOKUPS)); SETTINGS = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
+  DATA = []; LOOKUPS = clone(DEFAULT_LOOKUPS); SETTINGS = clone(DEFAULT_SETTINGS);
   recalcIds(); CSV_LOADED = true; CSV_FILE_NAME = null; CSV_LOADED_AT = new Date(); DIRTY = false; csvHandle = null;
   resetViewState(); document.body.classList.remove('no-data');
   renderCsvUi(); updateSaveButton(); navigateTo(currentPage, editingId);
 }
 async function saveCsv() {
   if (!CSV_LOADED) { showToast('Bitte zuerst die CSV verbinden', 'error'); return; }
+  if (DATA.length === 0 && LOADED_COUNT > 0 && !confirm('Die Datenbank ist leer, die geladene CSV enthielt aber ' + LOADED_COUNT + ' Posten.\n\nWirklich mit einer leeren CSV überschreiben?')) return;
   const content = buildCsv();
   // Chrome/Edge: direkt in die verbundene CSV schreiben (bei neuer Datenbank einmalig Speicherort waehlen)
   if (window.showSaveFilePicker) {
@@ -575,8 +586,10 @@ function renderCsvUi() {
   if (CSV_LOADED) { b.style.display = 'none'; b.innerHTML = ''; return; }
   b.style.display = 'block';
   b.innerHTML = '<div class="csv-banner"><div style="flex:1;min-width:240px"><div style="font-weight:700;margin-bottom:2px">Daten noch nicht geladen</div>' +
-    '<div style="font-size:.82rem;color:var(--muted)">Wähle die Datei <strong>' + esc(CSV_NAME) + '</strong> aus dem Ordner dieser HTML-Datei. Alle Posten, Stammdaten und Einstellungen liegen in dieser CSV.</div></div>' +
-    '<button class="btn btn-primary" onclick="connectCsv()">📂 ' + (csvHandle ? '„' + esc(csvHandle.name) + '“ verbinden' : 'CSV verbinden') + '</button>' +
+    '<div style="font-size:.82rem;color:var(--muted)">Wähle die Datei <strong>' + esc(CSV_NAME) + '</strong> aus dem Ordner dieser HTML-Datei. Alle Posten, Stammdaten und Einstellungen liegen in dieser CSV.</div><div style="font-size:.7rem;color:var(--light);margin-top:4px">Version ' + APP_VERSION + '</div></div>' +
+    (window.showOpenFilePicker
+      ? '<button class="btn btn-primary" onclick="connectCsv()">📂 ' + (csvHandle ? '„' + esc(csvHandle.name) + '“ verbinden' : 'CSV verbinden') + '</button>'
+      : '<label class="btn btn-primary" for="csv-file">📂 CSV verbinden</label>') +
     '<button class="btn btn-outline" onclick="startEmpty()">Leer starten</button></div>';
 }
 // Chrome/Edge: zuvor verbundene CSV beim Start automatisch laden, sofern der Browser den Zugriff noch erlaubt
@@ -611,9 +624,10 @@ function createMsel(opts) {
     const actions = document.createElement('div'); actions.className = 'msel-actions';
     const aAll = document.createElement('a'); aAll.textContent = 'Alle';
     const aNone = document.createElement('a'); aNone.textContent = 'Keine';
-    aAll.onclick = () => { opts.options.forEach(o => opts.selected.add(o.value)); if (opts.emptyMeansAll) opts.selected.clear(); buildPanel(); syncBtn(); opts.onChange(); };
-    aNone.onclick = () => { opts.selected.clear(); if (!opts.emptyMeansAll) {} buildPanel(); syncBtn(); opts.onChange(); };
-    if (!opts.emptyMeansAll) { aNone.onclick = () => { opts.selected.clear(); buildPanel(); syncBtn(); opts.onChange(); }; }
+    const apply = () => { buildPanel(); syncBtn(); opts.onChange(); };
+    // stopPropagation: das Panel wird neu aufgebaut, das Klickziel ist danach ausgehaengt und wuerde das Dropdown sonst schliessen
+    aAll.onclick = e => { e.stopPropagation(); if (opts.emptyMeansAll) opts.selected.clear(); else opts.options.forEach(o => opts.selected.add(o.value)); apply(); };
+    aNone.onclick = e => { e.stopPropagation(); opts.selected.clear(); apply(); };
     actions.appendChild(aAll); actions.appendChild(aNone);
     panel.appendChild(actions);
     let searchVal = '';
@@ -630,7 +644,7 @@ function createMsel(opts) {
       opts.options.filter(o => !searchVal || String(o.value).toLowerCase().includes(searchVal)).forEach(o => {
         const row = document.createElement('label'); row.className = 'msel-opt';
         const cb = document.createElement('input'); cb.type = 'checkbox';
-        cb.checked = opts.emptyMeansAll ? opts.selected.has(o.value) : opts.selected.has(o.value);
+        cb.checked = opts.selected.has(o.value);
         cb.addEventListener('change', () => {
           if (cb.checked) opts.selected.add(o.value); else opts.selected.delete(o.value);
           syncBtn(); opts.onChange();
@@ -652,7 +666,6 @@ function createMsel(opts) {
     if (!wasOpen) { buildPanel(); wrap.classList.add('open'); }
   });
   syncBtn();
-  wrap._sync = syncBtn;
   return wrap;
 }
 
@@ -660,14 +673,15 @@ function createMsel(opts) {
 let dashStatusFilter = 'alle';
 let dashKontoSel = null;         // genau EIN Konto fuer den Konto-Chart
 let dashKatSel = null;           // Set der gewaehlten Kategorien (Multi-Select)
+let dashStandKonto = null;        // Konto fuer die rollierende Ruecklage
 let dashPosStatusSel = null;     // Status-Filter fuer "Alle Posten" (Standard: aktiv + aktiv-gekündigt)
 let dashItems = [];
 
 function renderDashboard() {
   const ff = document.getElementById('dash-filters');
-  ff.innerHTML = [
-    filterSelect('Status', dashStatusFilter, ['alle', ...allStatusValues()], v => { dashStatusFilter=v; renderDashboard(); }),
-  ].join('');
+  ff.innerHTML = '<div class="filter-group"><label>Status:</label><select id="dash-status">' +
+    ['alle', ...allStatusValues()].map(o => '<option value="'+esc(o)+'"'+(o===dashStatusFilter?' selected':'')+'>'+esc(o==='alle'?'Alle':o)+'</option>').join('') + '</select></div>';
+  document.getElementById('dash-status').addEventListener('change', function(){ dashStatusFilter = this.value; renderDashboard(); });
 
   const items = DATA.filter(i => dashStatusFilter === 'alle' || i.status === dashStatusFilter);
   dashItems = items;
@@ -717,7 +731,7 @@ function renderDashboard() {
 
   // --- Alle Posten (vollstaendige Uebersicht) ---
   const statuses = allStatusValues();
-  if (dashPosStatusSel === null) dashPosStatusSel = new Set(['aktiv','aktiv-gekündigt'].filter(s => statuses.includes(s)));
+  if (dashPosStatusSel === null) dashPosStatusSel = new Set(DEFAULT_STATUS.filter(s => statuses.includes(s)));
   [...dashPosStatusSel].forEach(s => { if (!statuses.includes(s)) dashPosStatusSel.delete(s); });
   const actl = document.getElementById('allpos-ctl');
   actl.innerHTML = '';
@@ -739,24 +753,13 @@ function renderDashboard() {
     options:{responsive:true,maintainAspectRatio:false,plugins:{tooltip:{callbacks:{label:c=>c.label+': '+c.parsed.toFixed(2)+' € / mtl.'}}}}
   });
 
-  // --- Konto-Uebersicht (Ueberweisungsbetrag + Kontostand) ---
+  // --- Empfohlener Ueberweisungsbetrag je Konto (rechnerischer Durchschnitt ueber 12 Monate) ---
   const months = getRolling12();
   const kontoColors = getColorMap('konto');
   const kontoOv = konten.map(konto => {
     const ki = items.filter(i=>i.konto===konto);
-    const monthly = months.map(m => ({ ...m, betrag: ki.reduce((s,i)=>s+effActual(i,m.month),0) }));
-    const totalYear = monthly.reduce((s,m)=>s+m.betrag,0);
-    const empf = totalYear/12;
-    const monthlyU = months.map(m => ({ ...m, betrag: ki.reduce((s,i)=>s+effIrregular(i,m.month),0) }));
-    const totalYearU = monthlyU.reduce((s,m)=>s+m.betrag,0);
-    const empfU = totalYearU/12;
-    let bal = 0;
-    const roh = monthlyU.map(m => { bal += empfU - m.betrag; return bal; });
-    const minBal = roh.length ? Math.min(...roh) : 0;
-    const startPuffer = minBal < 0 ? -minBal : 0;
-    const verlauf = monthlyU.map((m,idx) => ({...m, kontostand: Math.max(0, (roh[idx]||0) + startPuffer)}));
-    const countU = ki.filter(i=>isUnregelmaessig(i)&&statusIncluded(i.status)).length;
-    return { konto, empf, totalYear, verlauf, count: ki.length, countU, color: kontoColors[konto]||FALLBACK_COLORS[0] };
+    const totalYear = months.reduce((s,m) => s + ki.reduce((s2,i) => s2 + effActual(i,m.month), 0), 0);
+    return { konto, empf: totalYear/12, totalYear, count: ki.length, color: kontoColors[konto]||FALLBACK_COLORS[0] };
   });
 
   let tbl = '<table><thead><tr><th>Konto</th><th class="text-right">Posten</th><th class="text-right">Jahreskosten</th><th class="text-right">Empf. mtl. Überweisung</th></tr></thead><tbody>';
@@ -764,13 +767,104 @@ function renderDashboard() {
   tbl += '<tr class="total-row"><td>Gesamt</td><td class="text-right">'+items.length+'</td><td class="text-right font-mono">'+(totalMtl*12).toFixed(2)+' €</td><td class="text-right font-mono">'+totalMtl.toFixed(2)+' €</td></tr></tbody></table>';
   document.getElementById('dash-konto-table').innerHTML = tbl;
 
-  const kontoOvU = kontoOv.filter(k=>k.countU > 0);
+  renderStandChart();
+}
+
+// Rollierende Ruecklage je Konto: Balken = faellige Abbuchungen je Posten, Linie = Stand der Ruecklage
+function renderStandChart() {
   destroyChart('c-stand');
+  const months = getRolling12();
+  const base = dashItems.filter(i => statusIncluded(i.status) && isUnregelmaessig(i));
+  const konten = [...new Set(base.map(i => i.konto).filter(Boolean))].sort();
+  const ctl = document.getElementById('stand-ctl'), note = document.getElementById('stand-note'), det = document.getElementById('stand-detail');
+  // Nur Posten mit hinterlegten Faelligkeitsmonaten haben einen konkreten Faelligkeitsmonat;
+  // alle anderen (nur rechnerisch auf 12 Monate verteilt) stehen getrennt in der Tabelle.
+  const hasMonths = i => parseFM(i).length > 0;
+  const calc = k => base.filter(i => i.konto === k && hasMonths(i))
+    .map(p => { const m = months.map(mm => effIrregular(p, mm.month)); return { p, m, year: m.reduce((a, b) => a + b, 0) }; })
+    .filter(x => x.year > 0).sort((a, b) => b.year - a.year);
+  const yearOf = k => calc(k).reduce((s, x) => s + x.year, 0);
+  const spreadOf = k => base.filter(i => i.konto === k && !hasMonths(i))
+    .map(p => ({ p, mtl: calcMtlKalk(p) * anteilOf(p), amt: (p.betragAlle2Monate + p.betragQuartal + p.betragHalbjaehrlich + p.betragJaehrlich) * anteilOf(p) }))
+    .filter(x => x.mtl > 0).sort((a, b) => b.mtl - a.mtl);
+  if (!konten.length) {
+    ctl.innerHTML = ''; det.innerHTML = '';
+    note.textContent = 'Keine unregelmäßigen Kosten vorhanden (Status-Einstellung in der Administration prüfen).';
+    return;
+  }
+  if (!dashStandKonto || !konten.includes(dashStandKonto)) dashStandKonto = konten.slice().sort((a, b) => yearOf(b) - yearOf(a))[0];
+  ctl.innerHTML = '<div class="filter-group"><label>Konto:</label><select id="stand-pick">' +
+    konten.map(k => '<option value="' + esc(k) + '"' + (k === dashStandKonto ? ' selected' : '') + '>' + esc(k) + '</option>').join('') + '</select></div>';
+  document.getElementById('stand-pick').addEventListener('change', function () { dashStandKonto = this.value; renderStandChart(); });
+
+  const pos = calc(dashStandKonto);
+  const due = months.map((_, i) => pos.reduce((s, x) => s + x.m[i], 0));
+  const yearTotal = due.reduce((a, b) => a + b, 0), zufluss = yearTotal / 12;
+  let bal = 0; const roh = due.map(d => (bal += zufluss - d));
+  const puffer = Math.max(0, -Math.min(...roh));
+  const stand = roh.map(v => Math.max(0, v + puffer));
+  const katColors = getColorMap('kategorie');
+  const colorOf = p => katColors[p.kategorie] || FALLBACK_COLORS[0];
+  const spread = spreadOf(dashStandKonto);
+  const spreadHtml = () => !spread.length ? '' :
+    '<div style="font-weight:700;font-size:.85rem;margin:18px 0 2px">Ohne Fälligkeitsmonat – nicht im Diagramm</div>' +
+    '<div style="font-size:.76rem;color:var(--muted);margin-bottom:6px">Für diese Posten ist kein Fälligkeitsmonat hinterlegt, daher ist nicht bekannt, in welchem Monat sie fällig werden. Unter „✏ Bearbeiten“ die Fälligkeitsmonate eintragen, dann erscheinen sie im Diagramm.</div>' +
+    '<table><thead><tr><th>Posten</th><th>Kategorie</th><th>Intervall</th><th class="text-right">Betrag je Fälligkeit</th><th class="text-right">rechnerisch mtl.</th></tr></thead><tbody>' +
+    spread.map(x => '<tr><td><span class="dot" style="background:' + colorOf(x.p) + '"></span>' + esc(x.p.thema) + '</td><td>' + esc(x.p.kategorie) + '</td><td>' + getIntervallLabel(x.p, true) + '</td>' +
+      '<td class="text-right font-mono">' + x.amt.toFixed(2) + ' €</td><td class="text-right font-mono">' + x.mtl.toFixed(2) + ' €</td></tr>').join('') +
+    '<tr class="total-row"><td colspan="4">Summe (' + spread.length + ' Posten)</td><td class="text-right font-mono">' + spread.reduce((a, x) => a + x.mtl, 0).toFixed(2) + ' €</td></tr></tbody></table>';
+  if (!pos.length) {
+    document.getElementById('stand-legend').innerHTML = '';
+    note.textContent = 'Für dieses Konto ist bei keinem unregelmäßigen Posten ein Fälligkeitsmonat hinterlegt.';
+    det.innerHTML = spreadHtml();
+    return;
+  }
+
+  // Balken = Kategorien (groesste zuerst); die Posten stecken im Tooltip
+  const katYear = {};
+  pos.forEach(x => { const k = x.p.kategorie || '—'; katYear[k] = (katYear[k] || 0) + x.year; });
+  const kats = Object.keys(katYear).sort((a, b) => katYear[b] - katYear[a]);
+  const inKat = k => pos.filter(x => (x.p.kategorie || '—') === k);
+  const datasets = kats.map(k => ({ type: 'bar', label: k, kat: k,
+    data: months.map((_, mi) => { const v = inKat(k).reduce((s, x) => s + x.m[mi], 0); return v > 0 ? r2(v) : null; }),
+    backgroundColor: katColors[k] || NEUTRAL_COLOR, borderColor: '#fff', borderWidth: 1, stack: 'due', order: 3 }));
+  datasets.push({ type: 'line', label: 'Stand der Rücklage', data: stand.map(r2), borderColor: '#1e293b', backgroundColor: '#1e293b',
+    borderWidth: 2.5, pointRadius: 3, pointHitRadius: 8, tension: .25, stack: 'stand', order: 1 });
+  datasets.push({ type: 'line', label: 'Monatliche Rücklage', data: months.map(() => r2(zufluss)), borderColor: '#64748b',
+    borderDash: [6, 4], borderWidth: 1.5, pointRadius: 0, pointHitRadius: 0, hoverRadius: 0, stack: 'zufluss', order: 2 });
   charts['c-stand'] = new Chart(document.getElementById('c-stand'), {
-    type:'line', data:{ labels:months.map(m=>m.label),
-    datasets: kontoOvU.map(k=>({ label:k.konto, data:k.verlauf.map(v=>r2(v.kontostand)), borderColor:k.color, backgroundColor:k.color+'22', fill:true, tension:.3, borderWidth:2, pointRadius:2 })) },
-    options:{ responsive:true, maintainAspectRatio:false, scales:{y:{min:0,ticks:{callback:v=>v+' €'}}}, plugins:{tooltip:{callbacks:{label:c=>c.dataset.label+': '+c.parsed.y.toFixed(2)+' €'}}} }
+    data: { labels: months.map(m => m.label), datasets },
+    options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'nearest', intersect: true },
+      scales: { x: { stacked: true, ticks: { autoSkip: false, maxRotation: 0,
+        font: ctx => ({ size: ctx.chart.width < 560 ? 9 : 12 }),
+        callback: function (v, i) { return this.chart.width < 560 ? [MONAT_LABELS[months[i].month - 1], String(Math.round(due[i]))] : [months[i].label, due[i].toFixed(2) + ' €']; } } }, y: { stacked: true, beginAtZero: true, ticks: { callback: v => v + ' €' } } },
+      plugins: {
+        legend: { labels: { boxWidth: 12, filter: li => li.text === 'Stand der Rücklage' || li.text === 'Monatliche Rücklage' } },
+        tooltip: { filter: it => it.parsed.y !== null && it.parsed.y > 0,
+          callbacks: {
+            title: its => its[0].dataset.kat ? its[0].dataset.kat + ' · ' + its[0].parsed.y.toFixed(2) + ' €' : [],
+            label: c => {
+              if (!c.dataset.kat) return c.dataset.label + ': ' + c.parsed.y.toFixed(2) + ' €';
+              const mi = c.dataIndex;
+              return inKat(c.dataset.kat).filter(x => x.m[mi] > 0).sort((a, b) => b.m[mi] - a.m[mi]).map(x => x.p.thema + ': ' + x.m[mi].toFixed(2) + ' €');
+            } } } } }
   });
+  document.getElementById('stand-legend').innerHTML = Object.entries(katYear).sort((a, b) => b[1] - a[1]).map(([k, y]) =>
+    '<span class="kat-chip" style="border-color:' + (katColors[k] || NEUTRAL_COLOR) + '"><span class="dot" style="background:' + (katColors[k] || NEUTRAL_COLOR) + ';margin-right:0"></span>' +
+    esc(k) + ' · ' + (y / 12).toFixed(2) + ' € mtl.</span>').join('');
+  note.textContent = pos.length + ' Posten · Jahresbedarf ' + yearTotal.toFixed(2) + ' € · monatliche Rücklage ' + zufluss.toFixed(2) + ' € · Balken = Kategorien (Posten im Tooltip), unter dem Monat die Monatssumme, Linie = Stand der Rücklage' + (spread.length ? ' · ' + spread.length + ' Posten ohne Fälligkeitsmonat sind nicht enthalten (siehe unten)' : '');
+
+  let h = '<div style="font-weight:700;font-size:.85rem;margin-bottom:6px">Diese Posten verursachen die monatliche Rücklage von ' + zufluss.toFixed(2) + ' €</div>' +
+    '<table><thead><tr><th>Posten</th><th>Kategorie</th><th>Intervall</th><th>Fällig in</th><th class="text-right">Betrag je Fälligkeit</th><th class="text-right">Rücklage mtl.</th><th class="text-right">Anteil</th></tr></thead><tbody>';
+  pos.forEach(x => {
+    const ms = [...new Set(months.map((mm, j) => x.m[j] > 0 ? mm.month : null).filter(Boolean))].sort((a, b) => a - b);
+    const when = ms.map(n => MONAT_LABELS[n - 1]).join(', ');
+    h += '<tr><td><span class="dot" style="background:' + colorOf(x.p) + '"></span>' + esc(x.p.thema) + '</td><td>' + esc(x.p.kategorie) + '</td><td>' + getIntervallLabel(x.p, true) + '</td><td>' + when + '</td>' +
+      '<td class="text-right font-mono">' + Math.max(...x.m).toFixed(2) + ' €</td><td class="text-right font-mono">' + (x.year / 12).toFixed(2) + ' €</td>' +
+      '<td class="text-right font-mono">' + (yearTotal ? Math.round(x.year / yearTotal * 100) : 0) + ' %</td></tr>';
+  });
+  h += '<tr class="total-row"><td colspan="5">Summe (' + pos.length + ' Posten)</td><td class="text-right font-mono">' + zufluss.toFixed(2) + ' €</td><td class="text-right font-mono">100 %</td></tr></tbody></table>';
+  det.innerHTML = h + spreadHtml();
 }
 
 // Ein Konto -> eine gestapelte Saeule aus allen Positionen des Kontos
@@ -780,8 +874,7 @@ function renderKontoChart() {
   const pos = dashItems.filter(i => i.konto === dashKontoSel && mtlWert(i) > 0).sort((a,b)=>mtlWert(b)-mtlWert(a));
   if (!dashKontoSel || pos.length === 0) {
     note.textContent = 'Keine Positionen mit mtl. Wert > 0 € für dieses Konto (Status-Einstellung in der Administration prüfen).';
-    const ctx = document.getElementById('c-konto').getContext('2d');
-    ctx.clearRect(0,0,ctx.canvas.width,ctx.canvas.height);
+    clearCanvas('c-konto');
     return;
   }
   const base = getLookupColor('konto', dashKontoSel);
@@ -808,8 +901,7 @@ function renderKatChart() {
   const katColors = getColorMap('kategorie');
   if (cats.length === 0) {
     chips.innerHTML = '<span style="font-size:.78rem;color:var(--muted)">Keine Kategorie ausgewählt.</span>';
-    const ctx = document.getElementById('c-kat').getContext('2d');
-    ctx.clearRect(0,0,ctx.canvas.width,ctx.canvas.height);
+    clearCanvas('c-kat');
     return;
   }
   const byCat = {};
@@ -823,7 +915,7 @@ function renderKatChart() {
         label: p.thema,
         data: cats.map(cc => cc === c ? r2(mtlWert(p)) : null),
         backgroundColor: shades[idx],           // Fuellung: Positionston
-        borderColor: katColors[c] || '#94a3b8', // Rahmen: Kategoriefarbe
+        borderColor: katColors[c] || NEUTRAL_COLOR, // Rahmen: Kategoriefarbe
         borderWidth: 2,
         borderSkipped: false,
         stack: 'kat',
@@ -841,7 +933,7 @@ function renderKatChart() {
   });
   chips.innerHTML = cats.map(c => {
     const sum = byCat[c].reduce((s,i)=>s+mtlWert(i),0);
-    return '<span class="kat-chip" style="border-color:'+(katColors[c]||'#94a3b8')+'">'+esc(c)+' · '+sum.toFixed(2)+' € · '+byCat[c].length+' Pos.</span>';
+    return '<span class="kat-chip" style="border-color:'+(katColors[c]||NEUTRAL_COLOR)+'">'+esc(c)+' · '+sum.toFixed(2)+' € · '+byCat[c].length+' Pos.</span>';
   }).join('');
 }
 
@@ -895,7 +987,7 @@ const KCOLS = [
   { key:'status',    label:'Status',    fval:i=>i.status||'—',               sval:i=>(i.status||'').toLowerCase() },
 ];
 // Filterzustand: pro Spalte ein Set gewaehlter Werte (leer = kein Filter)
-let kostenSel = {}; KCOLS.forEach(c => kostenSel[c.key] = new Set());
+const kostenSel = {}; KCOLS.forEach(c => kostenSel[c.key] = new Set());
 let kostenSort = { col:'mtl', dir:'desc' };
 let kostenSearch = '';
 
@@ -915,7 +1007,7 @@ function renderKostenListe() {
   ff.innerHTML = '';
   const katColors = getColorMap('kategorie'), kontoColors = getColorMap('konto');
   KCOLS.forEach(c => {
-    let opts = [...new Set(DATA.map(c.fval))];
+    const opts = [...new Set(DATA.map(c.fval))];
     opts.sort(c.optSort || ((a,b)=>String(a).localeCompare(String(b),'de')));
     const colored = c.key==='kategorie' ? katColors : c.key==='konto' ? kontoColors : null;
     ff.appendChild(createMsel({
@@ -942,7 +1034,7 @@ function renderKostenListe() {
 function updateKostenTable() {
   let items = kostenFiltered();
   // Sortierung
-  const col = KCOLS.find(c => c.key === kostenSort.col) || KCOLS[6];
+  const col = KCOLS.find(c => c.key === kostenSort.col) || KCOLS.find(c => c.key === 'mtl');
   const dir = kostenSort.dir === 'asc' ? 1 : -1;
   items = items.slice().sort((a,b) => {
     const va = col.sval(a), vb = col.sval(b);
@@ -964,7 +1056,7 @@ function updateKostenTable() {
   }));
 
   // Summen (reagieren live auf aktive Filter)
-  const sumGesamt = items.reduce((s,i) => s + ergebnisVoll(i) * anteilOf(i), 0);
+  const sumGesamt = items.reduce((s,i) => s + ergebnisAnteilig(i), 0);
   const sumMtl = items.reduce((s,i) => s + mtlWert(i), 0);
   const inclCount = items.filter(i => statusIncluded(i.status)).length;
   const katSums = {};
@@ -983,7 +1075,7 @@ function updateKostenTable() {
     const badge = i.status==='aktiv'?'badge-aktiv':i.status==='inaktiv'?'badge-inaktiv':i.status==='geplant'?'badge-geplant':'badge-gekuendigt';
     const incl = statusIncluded(i.status);
     const anteil = anteilOf(i);
-    const mtlVal = ergebnisVoll(i) * anteil;
+    const mtlVal = ergebnisAnteilig(i);
     const mtlCell = (incl
       ? '<span>'+mtlVal.toFixed(2)+' €</span>'
       : '<span class="excluded" title="Status „'+esc(i.status)+'“ ist in der mtl.-Berechnung nicht enthalten (Administration)">'+mtlVal.toFixed(2)+' €</span>')
@@ -1009,15 +1101,14 @@ function updateKostenTable() {
 function toggleAnteil(id) {
   const it = DATA.find(i => i.id === id); if (!it) return;
   it.anteil = anteilOf(it) === 0.5 ? 1 : 0.5;
-  it.ergebnisMtl = calcErgebnisMtl(it);
-  saveItems(DATA);
+  markDirty();
   showToast('Anteil „'+it.thema+'“: '+(it.anteil*100)+' %');
   updateKostenTable();
 }
 
 function deleteItem(id) {
   if (!confirm('Eintrag wirklich löschen?')) return;
-  DATA = DATA.filter(i => i.id !== id); saveItems(DATA);
+  DATA = DATA.filter(i => i.id !== id); markDirty();
   showToast('Eintrag gelöscht'); renderKostenListe();
 }
 
@@ -1074,7 +1165,7 @@ function updateResult() {
   const v = fv; const mk = (v('f-q')/3)+(v('f-j')/12)+(v('f-2m')/2)+(v('f-h')/6);
   const erg = (v('f-m')+mk)*(v('f-anteil')||1);
   const old = editingId ? DATA.find(i => i.id === editingId) : null;
-  const oldErg = old ? calcErgebnisMtl(old) : null;
+  const oldErg = old ? ergebnisAnteilig(old) : null;
   const diff = old ? erg - oldErg : 0;
   const hint = old ? '<div style="font-size:.74rem;color:var(--muted);margin-top:2px">bisher '+oldErg.toFixed(2)+' €'+(Math.abs(diff)>=0.005?' · <strong style="color:'+(diff>0?'var(--danger)':'var(--success)')+'">'+(diff>0?'+':'')+diff.toFixed(2)+' €</strong>':'')+'</div>' : '';
   document.getElementById('result-box').innerHTML = '<div><div style="font-size:.78rem;color:var(--muted)">Mtl. kalkuliert (unregelm.)</div><div class="font-mono" style="font-size:1.1rem;font-weight:700">'+mk.toFixed(2)+' €</div></div><div style="text-align:right"><div style="font-size:.78rem;color:var(--muted)">Ergebnis monatlich (× Anteil)</div><div class="font-mono" style="font-size:1.4rem;font-weight:700;color:var(--primary)">'+erg.toFixed(2)+' €</div>'+hint+'</div>';
@@ -1088,7 +1179,6 @@ function saveForm(e) {
   if (!thema) { showToast('Bitte Thema eingeben','error'); return; }
   if (!konto) { showToast('Bitte Konto angeben','error'); return; }
   const selMonths = []; document.querySelectorAll('.month-btn.selected').forEach(b => selMonths.push(parseInt(b.dataset.m)));
-  const mk = calcMtlKalk({betragQuartal:fv('f-q'),betragJaehrlich:fv('f-j'),betragAlle2Monate:fv('f-2m'),betragHalbjaehrlich:fv('f-h')});
   const anteil = fv('f-anteil') === 0.5 ? 0.5 : 1;
   const entry = {
     id: editingId || NEXT_ID++,
@@ -1097,13 +1187,12 @@ function saveForm(e) {
     nummer: fs('f-nummer'), prio: parseInt(fs('f-prio'))||3, anteil,
     betragMonatlich: fv('f-m'), betragAlle2Monate: fv('f-2m'), betragQuartal: fv('f-q'),
     betragHalbjaehrlich: fv('f-h'), betragJaehrlich: fv('f-j'),
-    mtlKalkuliert: mk, ergebnisMtl: (fv('f-m')+mk)*anteil,
     faelligkeitsMonate: JSON.stringify(selMonths.sort((a,b)=>a-b)),
     notfallBetrag: fv('f-notfall'), zugang: fs('f-zugang'),
   };
   if (editingId) { DATA = DATA.map(i => i.id === editingId ? entry : i); }
   else { DATA.push(entry); }
-  saveItems(DATA);
+  markDirty();
   showToast(editingId ? 'Eintrag aktualisiert' : 'Eintrag erstellt');
   editingId = null;
   navigateTo('kosten');
@@ -1125,9 +1214,10 @@ function renderAdmin() {
     '<p style="font-size:.8rem;color:var(--muted)">Nur Posten mit einem der ausgewählten Status fließen in die monatlichen Summen ein – global in Tabelle, Kennzahlen und allen Diagrammen. Änderungen wirken sofort.</p>'+
     '<div class="status-checks">'+st.map(s => {
       const on = statusIncluded(s);
-      return '<label class="status-check'+(on?' on':'')+'"><input type="checkbox" '+(on?'checked':'')+' onchange="toggleMtlStatus(\''+esc(s).replace(/'/g,"\\'")+'\')"> '+esc(s)+'</label>';
+      return '<label class="status-check'+(on?' on':'')+'"><input type="checkbox" data-status="'+esc(s)+'" '+(on?'checked':'')+'> '+esc(s)+'</label>';
     }).join('')+'</div>'+
     '<p style="font-size:.8rem;margin-top:12px">Aktuelle mtl. Gesamtsumme (alle Posten): <strong class="font-mono">'+totalMtl.toFixed(2)+' €</strong></p>';
+  document.querySelectorAll('#admin-settings input[data-status]').forEach(cb => cb.addEventListener('change', () => toggleMtlStatus(cb.dataset.status)));
 
   const loadedTxt = CSV_LOADED_AT ? CSV_LOADED_AT.toLocaleString('de-DE') : '–';
   document.getElementById('admin-storage').innerHTML =
@@ -1142,7 +1232,7 @@ function renderAdmin() {
     '<button class="btn btn-primary" onclick="saveCsv()">💾 In CSV speichern</button>'+
     '<button class="btn btn-outline" onclick="reloadCsv()">↻ CSV neu laden</button>'+
     '<button class="btn btn-outline" onclick="chooseCsv()">📂 Andere CSV wählen</button>'+
-    '<span style="font-size:.78rem;color:var(--muted)">Geladen: <strong>'+esc(loadedTxt)+'</strong> · '+DATA.length+' Posten'+(DIRTY?' · <span style="color:#d97706;font-weight:700">ungespeicherte Änderungen</span>':'')+'</span>'+
+    '<span style="font-size:.78rem;color:var(--muted)">Version '+APP_VERSION+' · Geladen: <strong>'+esc(loadedTxt)+'</strong> · '+DATA.length+' Posten'+(DIRTY?' · <span style="color:#d97706;font-weight:700">ungespeicherte Änderungen</span>':'')+'</span>'+
     '</div>';
 
   const c = document.getElementById('admin-sections');
@@ -1166,7 +1256,7 @@ function renderAdmin() {
 function toggleMtlStatus(name) {
   const idx = SETTINGS.mtlStatuses.indexOf(name);
   if (idx >= 0) SETTINGS.mtlStatuses.splice(idx, 1); else SETTINGS.mtlStatuses.push(name);
-  saveSettings();
+  markDirty();
   showToast('mtl.-Berechnung: '+(SETTINGS.mtlStatuses.length ? SETTINGS.mtlStatuses.join(', ') : 'keine Status ausgewählt'));
   renderAdmin();
 }
@@ -1177,7 +1267,7 @@ function addLookup(type, hasColor) {
   if (LOOKUPS.find(l => l.type===type && l.name===name)) { showToast('Existiert bereits','error'); return; }
   const color = hasColor ? (document.getElementById('ac-'+type)?.value||null) : null;
   LOOKUPS.push({ id: NEXT_LOOKUP_ID++, type, name, color, sortOrder: LOOKUPS.filter(l=>l.type===type).length });
-  saveLookups(LOOKUPS); nameEl.value = ''; showToast('„'+name+'“ hinzugefügt'); renderAdmin();
+  markDirty(); nameEl.value = ''; showToast('„'+name+'“ hinzugefügt'); renderAdmin();
 }
 function editLookup(id, hasColor) {
   const item = LOOKUPS.find(l => l.id === id); if (!item) return;
@@ -1185,45 +1275,41 @@ function editLookup(id, hasColor) {
   const trimmed = newName.trim(); if (!trimmed) { showToast('Name darf nicht leer sein','error'); return; }
   if (trimmed !== item.name && LOOKUPS.find(l => l.type===item.type && l.name===trimmed)) { showToast('Name existiert bereits','error'); return; }
   const oldName = item.name;
-  if (hasColor) { const c = prompt('Farbe (Hex, z.B. #60B5FF):', item.color||'#60B5FF'); if (c) item.color = c; }
+  if (hasColor) {
+    const c = prompt('Farbe (Hex, z.B. #60B5FF):', item.color||'#60B5FF');
+    if (c && !safeColor(c)) { showToast('Ungültige Farbe – bitte Hex wie #60B5FF angeben','error'); return; }
+    if (c) item.color = safeColor(c);
+  }
   item.name = trimmed;
   // Update cost items
-  const fieldMap = { kategorie:'kategorie', konto:'konto', zahlart:'zahlart', status:'status' };
   if (oldName !== trimmed) {
-    DATA.forEach(i => { if (i[fieldMap[item.type]] === oldName) i[fieldMap[item.type]] = trimmed; }); saveItems(DATA);
+    DATA.forEach(i => { if (i[item.type] === oldName) i[item.type] = trimmed; }); markDirty();
     if (item.type === 'status' && SETTINGS.mtlStatuses.includes(oldName)) {
-      SETTINGS.mtlStatuses = SETTINGS.mtlStatuses.map(s => s === oldName ? trimmed : s); saveSettings();
+      SETTINGS.mtlStatuses = SETTINGS.mtlStatuses.map(s => s === oldName ? trimmed : s); markDirty();
     }
   }
-  saveLookups(LOOKUPS); showToast('Gespeichert'); renderAdmin();
+  markDirty(); showToast('Gespeichert'); renderAdmin();
 }
 function deleteLookup(id, type) {
   const item = LOOKUPS.find(l => l.id === id); if (!item) return;
-  const fieldMap = { kategorie:'kategorie', konto:'konto', zahlart:'zahlart', status:'status' };
-  const inUse = DATA.filter(i => i[fieldMap[type]] === item.name).length;
+  const inUse = DATA.filter(i => i[type] === item.name).length;
   if (inUse > 0) { showToast(inUse+' Einträge verwenden „'+item.name+'“ noch','error'); return; }
   if (!confirm('„'+item.name+'“ löschen?')) return;
-  LOOKUPS = LOOKUPS.filter(l => l.id !== id); saveLookups(LOOKUPS);
+  LOOKUPS = LOOKUPS.filter(l => l.id !== id); markDirty();
   showToast('Gelöscht'); renderAdmin();
 }
 
 // ========== HELPERS ==========
 function r2(v){return Math.round((v||0)*100)/100;}
-function esc(s){const d=document.createElement('div');d.textContent=s||'';return d.innerHTML;}
+function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
+function safeColor(c){c=String(c??'').trim();return /^#[0-9a-fA-F]{3,8}$/.test(c)?c:null;}
+function clearCanvas(id){const c=document.getElementById(id).getContext('2d');c.clearRect(0,0,c.canvas.width,c.canvas.height);}
 function destroyChart(id){if(charts[id]){charts[id].destroy();delete charts[id];}}
-function kpiCard(label,value,sub){return '<div class="card"><div class="card-label">'+label+'</div><div class="card-value font-mono">'+value+'</div><div class="card-sub">'+sub+'</div></div>';}
+function kpiCard(label,value,sub){return '<div class="card"><div class="card-label">'+esc(label)+'</div><div class="card-value font-mono">'+esc(value)+'</div><div class="card-sub">'+esc(sub)+'</div></div>';}
 function hexToRgb(h){h=String(h||'#60B5FF').replace('#','');if(h.length===3)h=h.split('').map(c=>c+c).join('');const n=parseInt(h,16)||0;return[(n>>16)&255,(n>>8)&255,n&255];}
 function mixHex(a,b,w){const A=hexToRgb(a),B=hexToRgb(b);return '#'+A.map((v,i)=>Math.round(v+(B[i]-v)*w).toString(16).padStart(2,'0')).join('');}
 // Sequenzielle Abstufungen einer Basisfarbe (groesster Posten = kraeftigster Ton)
 function shadeSeq(base,count){return Array.from({length:count},(_,i)=>mixHex(base,'#ffffff',count<=1?0:0.62*i/(count-1)));}
-function filterSelect(label,current,options,onChange){
-  const id='fs-'+label.replace(/\W/g,'')+'-'+Math.random().toString(36).slice(2,6);
-  setTimeout(()=>{
-    const el=document.getElementById(id);
-    if(el) el.addEventListener('change',function(){onChange(this.value);});
-  },0);
-  return '<div class="filter-group"><label>'+label+':</label><select id="'+id+'">'+options.map(o=>'<option value="'+esc(o)+'"'+(o===current?' selected':'')+'>'+esc(o==='alle'?'Alle':o)+'</option>').join('')+'</select></div>';
-}
 function fg(label,type,id,val,extra,datalist){
   let dl='';
   if(datalist){const dlid=id+'-dl';dl='<datalist id="'+dlid+'">'+datalist.map(d=>'<option value="'+esc(d)+'">').join('')+'</datalist>';extra=(extra||'')+' list="'+dlid+'"';}
