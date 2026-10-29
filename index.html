@@ -67,6 +67,16 @@ tr:hover td{background:#f8fafc}
 .badge-inaktiv{background:#f1f5f9;color:#64748b}
 .badge-geplant{background:#dbeafe;color:#1e40af}
 .badge-gekuendigt{background:#fef3c7;color:#92400e}
+.sz-off td{color:var(--light);text-decoration:line-through}
+.sz-off td:first-child{text-decoration:none}
+.chk-group{border:1px solid var(--border);border-radius:8px;margin-bottom:10px;background:var(--card)}
+.chk-group>summary{cursor:pointer;padding:9px 12px;font-weight:600;font-size:.84rem;display:flex;gap:8px;align-items:center}
+.chk-row{display:flex;align-items:center;gap:10px;padding:6px 12px;border-top:1px solid #f1f5f9;font-size:.82rem}
+.chk-row .txt{flex:1}
+.badge-warn{background:#fef3c7;color:#92400e;margin-left:6px;cursor:help}
+.month-hint{font-size:.78rem;margin-top:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.month-hint.bad{color:var(--danger)}.month-hint.warn{color:#92400e}.month-hint.good{color:#166534}.month-hint.muted{color:var(--muted)}
+.month-box.bad{outline:2px solid var(--danger);outline-offset:6px;border-radius:8px}
 .filters{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;align-items:center}
 .filter-group{display:flex;align-items:center;gap:6px;background:#f1f5f9;border-radius:8px;padding:4px 10px}
 .filter-group select,.filter-group input{background:transparent;border:none;font-size:.82rem;font-weight:500;outline:none;color:var(--text)}
@@ -157,6 +167,7 @@ input[type=color]{width:38px;height:34px;padding:2px;border:1px solid var(--bord
   <nav>
     <a href="#" data-page="dashboard" class="active">📊 <span>Dashboard</span></a>
     <a href="#" data-page="kosten">📋 <span>Alle Kosten</span></a>
+    <a href="#" data-page="szenario">🧪 <span>Was wäre wenn</span></a>
     <a href="#" data-page="neu">➕ <span>Neuer Eintrag</span></a>
     <a href="#" data-page="admin">⚙️ <span>Administration</span></a>
   </nav>
@@ -219,6 +230,16 @@ input[type=color]{width:38px;height:34px;padding:2px;border:1px solid var(--bord
     <div class="card" style="overflow-x:auto"><table id="kosten-table"><thead></thead><tbody></tbody></table></div>
   </div>
 
+  <!-- WAS WAERE WENN -->
+  <div id="page-szenario" class="page">
+    <h1 class="page-title">Was wäre wenn?</h1>
+    <p class="page-sub">Posten testweise streichen und die Auswirkung auf die monatlichen Kosten sehen. Es werden keine Daten verändert.</p>
+    <div class="grid grid-4" id="sz-summary" style="margin-bottom:16px"></div>
+    <div class="filters" id="sz-filters"></div>
+    <div class="card" style="overflow-x:auto"><table id="sz-table"><thead></thead><tbody></tbody></table></div>
+    <div class="section" style="margin-top:20px"><div class="section-title">💳 Auswirkung auf den empfohlenen Überweisungsbetrag je Konto</div><div class="card" id="sz-konto" style="overflow-x:auto"></div></div>
+  </div>
+
   <!-- NEUER EINTRAG / BEARBEITEN -->
   <div id="page-neu" class="page">
     <h1 class="page-title" id="form-title">Neuer Kosteneintrag</h1>
@@ -231,6 +252,7 @@ input[type=color]{width:38px;height:34px;padding:2px;border:1px solid var(--bord
     <h1 class="page-title">Administration</h1>
     <p class="page-sub">Verwalte Berechnungseinstellungen, Kategorien, Konten, Zahlarten und Status.</p>
     <div class="card" id="admin-storage" style="margin-bottom:16px"></div>
+    <div class="card" id="admin-check" style="margin-bottom:16px"></div>
     <div class="card" id="admin-settings" style="margin-bottom:16px"></div>
     <div class="grid grid-2" id="admin-sections"></div>
   </div>
@@ -244,10 +266,11 @@ input[type=color]{width:38px;height:34px;padding:2px;border:1px solid var(--bord
 // Posten, Stammdaten (Kategorie/Konto/Zahlart/Status inkl. Farben) und Einstellungen
 // werden beim Verbinden aus der CSV gelesen und mit "Speichern" dorthin zurueckgeschrieben.
 // localStorage dient ausschliesslich als Absturzsicherung fuer ungespeicherte Aenderungen.
-const APP_VERSION = '2026-10-25.11';
+const APP_VERSION = '2026-10-29.2';
 const CSV_NAME = 'Finanzplanung_Daten.csv';
 const CACHE_KEY = 'finanzplanung_cache';
-const DEFAULT_LOOKUPS = [{"id":1,"type":"kategorie","name":"Wohnen","color":"#60B5FF","sortOrder":0},{"id":21,"type":"status","name":"aktiv","color":"#60B5FF","sortOrder":0},{"id":8,"type":"konto","name":"C24 fix mtl.","color":"#60B5FF","sortOrder":0},{"id":18,"type":"zahlart","name":"Konto","color":"#60B5FF","sortOrder":0},{"id":22,"type":"status","name":"inaktiv","color":"#FF9149","sortOrder":1},{"id":19,"type":"zahlart","name":"Apple","color":"#FF9149","sortOrder":1},{"id":2,"type":"kategorie","name":"Versicherung","color":"#FF9149","sortOrder":1},{"id":9,"type":"konto","name":"C24 unregelm","color":"#FF9149","sortOrder":1},{"id":23,"type":"status","name":"geplant","color":"#2A9D8F","sortOrder":2},{"id":10,"type":"konto","name":"C24 Haus","color":"#2A9D8F","sortOrder":2},{"id":3,"type":"kategorie","name":"Sparen","color":"#2A9D8F","sortOrder":2},{"id":20,"type":"zahlart","name":"Paypal","color":"#2A9D8F","sortOrder":2},{"id":24,"type":"status","name":"aktiv-gekündigt","color":"#A19AD3","sortOrder":3},{"id":4,"type":"kategorie","name":"Abo","color":"#A19AD3","sortOrder":3},{"id":11,"type":"konto","name":"C24 Haushalt","color":"#A19AD3","sortOrder":3},{"id":12,"type":"konto","name":"C24 Sonderausgaben","color":"#FF9898","sortOrder":4},{"id":5,"type":"kategorie","name":"Kinder","color":"#FF9898","sortOrder":4},{"id":13,"type":"konto","name":"C 24 was gönnen","color":"#FF90BB","sortOrder":5},{"id":6,"type":"kategorie","name":"Haushalt","color":"#FF90BB","sortOrder":5},{"id":7,"type":"kategorie","name":"Sonstiges","color":"#FF6363","sortOrder":6},{"id":14,"type":"konto","name":"ING","color":"#72BF78","sortOrder":6},{"id":15,"type":"konto","name":"ING (später)","color":"#B5D99C","sortOrder":7},{"id":16,"type":"konto","name":"Gemeinschaft","color":"#FF6363","sortOrder":8},{"id":17,"type":"konto","name":"Unbekannt","color":"#80D8C3","sortOrder":9}];
+// Neutrale Beispiele: die echten Kategorien, Konten und Farben stehen ausschliesslich in der CSV (#stammdaten)
+const DEFAULT_LOOKUPS = [{"id":1,"type":"kategorie","name":"Wohnen","color":"#60B5FF","sortOrder":0},{"id":2,"type":"kategorie","name":"Versicherung","color":"#FF9149","sortOrder":1},{"id":3,"type":"kategorie","name":"Abo","color":"#A19AD3","sortOrder":2},{"id":4,"type":"kategorie","name":"Sparen","color":"#2A9D8F","sortOrder":3},{"id":5,"type":"kategorie","name":"Sonstiges","color":"#FF6363","sortOrder":4},{"id":6,"type":"konto","name":"Girokonto","color":"#60B5FF","sortOrder":0},{"id":7,"type":"konto","name":"Sparkonto","color":"#72BF78","sortOrder":1},{"id":8,"type":"zahlart","name":"Konto","color":null,"sortOrder":0},{"id":9,"type":"zahlart","name":"Kreditkarte","color":null,"sortOrder":1},{"id":10,"type":"zahlart","name":"PayPal","color":null,"sortOrder":2},{"id":11,"type":"status","name":"aktiv","color":null,"sortOrder":0},{"id":12,"type":"status","name":"inaktiv","color":null,"sortOrder":1},{"id":13,"type":"status","name":"geplant","color":null,"sortOrder":2},{"id":14,"type":"status","name":"aktiv-gekündigt","color":null,"sortOrder":3}];
 const DEFAULT_STATUS = ['aktiv', 'aktiv-gekündigt'];
 const DEFAULT_SETTINGS = { mtlStatuses: DEFAULT_STATUS };
 const NEUTRAL_COLOR = '#94a3b8';
@@ -372,6 +395,7 @@ function navigateTo(page, eid) {
   if (page === 'dashboard') renderDashboard();
   else if (page === 'kosten') renderKostenListe();
   else if (page === 'neu') { editingId = eid || null; renderForm(); }
+  else if (page === 'szenario') renderSzenario();
   else if (page === 'admin') renderAdmin();
 }
 
@@ -494,12 +518,14 @@ function loadFromText(text, name) {
   renderCsvUi(); updateSaveButton();
   try { navigateTo(currentPage, editingId); }
   catch (e) { console.error(e); showToast('Anzeigefehler nach dem Laden: ' + ((e && e.message) || e), 'error'); return true; }
-  showToast((name || CSV_NAME) + ' geladen · ' + DATA.length + ' Posten');
+  const noMonths = DATA.filter(i => isUnregelmaessig(i) && !parseFM(i).length).length;
+  showToast((name || CSV_NAME) + ' geladen · ' + DATA.length + ' Posten' + (noMonths ? ' · ⚠ ' + noMonths + ' ohne Fälligkeitsmonat' : ''));
   return true;
 }
 function resetViewState() {
   dashKontoSel = null; dashKatSel = null; dashPosStatusSel = null; dashStandKonto = null;
   KCOLS.forEach(c => kostenSel[c.key].clear()); kostenSearch = '';
+  szOff.clear(); Object.values(szSel).forEach(x => x.clear());
 }
 async function loadFromHandle(h) {
   const f = await h.getFile();
@@ -1059,6 +1085,7 @@ function updateKostenTable() {
   const sumGesamt = items.reduce((s,i) => s + ergebnisAnteilig(i), 0);
   const sumMtl = items.reduce((s,i) => s + mtlWert(i), 0);
   const inclCount = items.filter(i => statusIncluded(i.status)).length;
+  const noMonths = items.filter(i => isUnregelmaessig(i) && !parseFM(i).length).length;
   const katSums = {};
   items.forEach(i => { const v = mtlWert(i); if (v>0) katSums[i.kategorie||'—'] = (katSums[i.kategorie||'—']||0) + v; });
   const topKat = Object.entries(katSums).sort((a,b)=>b[1]-a[1])[0];
@@ -1066,7 +1093,7 @@ function updateKostenTable() {
     kpiCard('Gesamt (anteilig)', sumGesamt.toFixed(2)+' €', 'Σ Ergebnis × Anteil, alle gefilterten Posten'),
     kpiCard('Monatlich (mtl.)', sumMtl.toFixed(2)+' €', 'Status gemäß Administration: '+(SETTINGS.mtlStatuses.join(', ')||'–')),
     kpiCard('Jährlich', (sumMtl*12).toFixed(2)+' €', '12 × mtl.'),
-    kpiCard('Posten', items.length+' / '+DATA.length, inclCount+' in mtl. enthalten · Ø '+(inclCount?(sumMtl/inclCount).toFixed(2):'0.00')+' €'),
+    kpiCard('Posten', items.length+' / '+DATA.length, inclCount+' in mtl. enthalten · Ø '+(inclCount?(sumMtl/inclCount).toFixed(2):'0.00')+' €'+(noMonths?' · ⚠ '+noMonths+' ohne Fälligkeitsmonat':'')),
     kpiCard('Größte Kategorie (mtl.)', topKat ? topKat[1].toFixed(2)+' €' : '–', topKat ? topKat[0] : 'keine Daten'),
   ].join('');
 
@@ -1084,7 +1111,7 @@ function updateKostenTable() {
       '<td><a href="#" class="row-link" title="Eintrag bearbeiten" onclick="navigateTo(\'neu\','+i.id+');return false">'+esc(i.thema)+'</a></td>'+
       '<td><span class="dot" style="background:'+getLookupColor('kategorie',i.kategorie)+'"></span>'+esc(i.kategorie)+'</td>'+
       '<td><span class="dot" style="background:'+getLookupColor('konto',i.konto)+'"></span>'+esc(i.konto)+'</td>'+
-      '<td>'+getIntervallLabel(i)+'</td>'+
+      '<td>'+getIntervallLabel(i)+(isUnregelmaessig(i) && !parseFM(i).length ? '<span class="badge badge-warn" title="Kein Fälligkeitsmonat hinterlegt – erscheint nicht im Rücklage-Diagramm. Unter Bearbeiten ergänzen.">⚠ Monate fehlen</span>' : '')+'</td>'+
       '<td>'+(i.prio??'')+'</td>'+
       '<td class="text-right font-mono">'+ergebnisVoll(i).toFixed(2)+' €</td>'+
       '<td class="text-right font-mono" style="white-space:nowrap">'+mtlCell+'</td>'+
@@ -1145,8 +1172,8 @@ function renderForm() {
     fg('Jährlich (€)','number','f-j',d.betragJaehrlich,'step="0.01"')+
     '</div>'+
     '<div class="result-box" id="result-box"></div>'+
-    '<h3 style="margin:8px 0;font-size:.9rem;font-weight:600">Fälligkeitsmonate</h3>'+
-    '<div class="month-btns" id="month-btns">'+MONAT_LABELS.map((l,i)=>'<button type="button" class="month-btn'+(fm.includes(i+1)?' selected':'')+'" data-m="'+(i+1)+'">'+l+'</button>').join('')+'</div>'+
+    '<h3 id="month-title" style="margin:8px 0;font-size:.9rem;font-weight:600">Fälligkeitsmonate <span id="month-req" style="color:var(--danger)"></span></h3>'+
+    '<div class="month-box" id="month-box"><div class="month-btns" id="month-btns">'+MONAT_LABELS.map((l,i)=>'<button type="button" class="month-btn'+(fm.includes(i+1)?' selected':'')+'" data-m="'+(i+1)+'">'+l+'</button>').join('')+'</div><div class="month-hint muted" id="month-hint"></div></div>'+
     '<div class="form-grid" style="margin-top:14px">'+
     '<div class="form-group"><label>Notiz</label><textarea id="f-notiz" rows="3">'+esc(d.notiz||'')+'</textarea></div>'+
     '<div>'+fg('Notfall-Betrag (€)','number','f-notfall',d.notfallBetrag||0,'step="0.01"')+fg('Zugang (URL)','text','f-zugang',d.zugang||'')+'</div>'+
@@ -1161,7 +1188,40 @@ function renderForm() {
   ['f-m','f-2m','f-q','f-h','f-j','f-anteil'].forEach(id => { const el=document.getElementById(id); if(el) { el.addEventListener('input', updateResult); el.addEventListener('change', updateResult); } });
   updateResult();
 }
+// Zahlungsrhythmen ausser monatlich: Feld, Name, Abstand in Monaten, erwartete Anzahl Faelligkeitsmonate
+const FORM_INTERVALS = [['f-2m', 'Alle 2 Monate', 2], ['f-q', 'Quartalsweise', 3], ['f-h', 'Halbjährlich', 6], ['f-j', 'Jährlich', 12]];
+function formIntervals() { return FORM_INTERVALS.filter(([id]) => fv(id) > 0).map(([id, name, step]) => ({ name, step, count: 12 / step })); }
+function selectedMonths() { return [...document.querySelectorAll('.month-btn.selected')].map(b => +b.dataset.m).sort((a, b) => a - b); }
+// gleichmaessig verteilte Monate ab dem ersten gewaehlten Monat (z. B. Quartal ab Feb -> 2, 5, 8, 11)
+function suggestMonths(first, step) { const out = []; for (let m = first; m < first + 12; m += step) out.push(((m - 1) % 12) + 1); return [...new Set(out)].sort((a, b) => a - b); }
+function applyMonthSuggestion(step) {
+  const first = selectedMonths()[0]; if (!first) return;
+  const set = new Set(suggestMonths(first, step));
+  document.querySelectorAll('.month-btn').forEach(b => b.classList.toggle('selected', set.has(+b.dataset.m)));
+  updateResult();
+}
+function updateMonthHint() {
+  const hint = document.getElementById('month-hint'), req = document.getElementById('month-req'), box = document.getElementById('month-box');
+  if (!hint) return;
+  const iv = formIntervals(), sel = selectedMonths();
+  box.classList.remove('bad');
+  if (!iv.length) { req.textContent = ''; hint.className = 'month-hint muted'; hint.textContent = 'Nur nötig, wenn ein Betrag nicht monatlich gezahlt wird (alle 2 Monate, quartalsweise, halbjährlich, jährlich).'; return; }
+  const p = iv[0];
+  req.textContent = '*';
+  if (!sel.length) {
+    hint.className = 'month-hint bad';
+    hint.textContent = 'Pflichtangabe: Bitte die Monate wählen, in denen gezahlt wird (' + p.name + ': üblich ' + p.count + (p.count === 1 ? ' Monat' : ' Monate') + ').';
+  } else if (sel.length !== p.count) {
+    hint.className = 'month-hint warn';
+    hint.innerHTML = esc(p.name + ': üblich sind ' + p.count + (p.count === 1 ? ' Monat' : ' Monate') + ', gewählt ' + sel.length + '.') +
+      (p.count > 1 ? ' <button type="button" class="btn btn-outline btn-sm" onclick="applyMonthSuggestion(' + p.step + ')">Passende Monate ergänzen (ab ' + MONAT_LABELS[sel[0] - 1] + ')</button>' : '');
+  } else {
+    hint.className = 'month-hint good';
+    hint.textContent = '✔ ' + sel.length + (sel.length === 1 ? ' Fälligkeitsmonat' : ' Fälligkeitsmonate') + ' passend zu ' + p.name + '.';
+  }
+}
 function updateResult() {
+  updateMonthHint();
   const v = fv; const mk = (v('f-q')/3)+(v('f-j')/12)+(v('f-2m')/2)+(v('f-h')/6);
   const erg = (v('f-m')+mk)*(v('f-anteil')||1);
   const old = editingId ? DATA.find(i => i.id === editingId) : null;
@@ -1178,7 +1238,14 @@ function saveForm(e) {
   const thema = fs('f-thema'), konto = fs('f-konto');
   if (!thema) { showToast('Bitte Thema eingeben','error'); return; }
   if (!konto) { showToast('Bitte Konto angeben','error'); return; }
-  const selMonths = []; document.querySelectorAll('.month-btn.selected').forEach(b => selMonths.push(parseInt(b.dataset.m)));
+  const iv = formIntervals(), selMonths = selectedMonths();
+  if (iv.length && !selMonths.length) {
+    document.getElementById('month-box').classList.add('bad');
+    document.getElementById('month-title').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    showToast('Bitte Fälligkeitsmonate wählen (' + iv[0].name + ')', 'error'); return;
+  }
+  if (iv.length && selMonths.length !== iv[0].count &&
+      !confirm(iv[0].name + ': üblich sind ' + iv[0].count + (iv[0].count === 1 ? ' Fälligkeitsmonat' : ' Fälligkeitsmonate') + ', gewählt sind ' + selMonths.length + '.\n\nTrotzdem speichern?')) return;
   const anteil = fv('f-anteil') === 0.5 ? 0.5 : 1;
   const entry = {
     id: editingId || NEXT_ID++,
@@ -1187,7 +1254,7 @@ function saveForm(e) {
     nummer: fs('f-nummer'), prio: parseInt(fs('f-prio'))||3, anteil,
     betragMonatlich: fv('f-m'), betragAlle2Monate: fv('f-2m'), betragQuartal: fv('f-q'),
     betragHalbjaehrlich: fv('f-h'), betragJaehrlich: fv('f-j'),
-    faelligkeitsMonate: JSON.stringify(selMonths.sort((a,b)=>a-b)),
+    faelligkeitsMonate: JSON.stringify(iv.length ? selMonths : []),
     notfallBetrag: fv('f-notfall'), zugang: fs('f-zugang'),
   };
   if (editingId) { DATA = DATA.map(i => i.id === editingId ? entry : i); }
@@ -1219,6 +1286,7 @@ function renderAdmin() {
     '<p style="font-size:.8rem;margin-top:12px">Aktuelle mtl. Gesamtsumme (alle Posten): <strong class="font-mono">'+totalMtl.toFixed(2)+' €</strong></p>';
   document.querySelectorAll('#admin-settings input[data-status]').forEach(cb => cb.addEventListener('change', () => toggleMtlStatus(cb.dataset.status)));
 
+  renderDataCheck();
   const loadedTxt = CSV_LOADED_AT ? CSV_LOADED_AT.toLocaleString('de-DE') : '–';
   document.getElementById('admin-storage').innerHTML =
     '<div class="section-title">💾 Datenhaltung – eine CSV im Ordner der HTML</div>'+
@@ -1297,6 +1365,98 @@ function deleteLookup(id, type) {
   if (!confirm('„'+item.name+'“ löschen?')) return;
   LOOKUPS = LOOKUPS.filter(l => l.id !== id); markDirty();
   showToast('Gelöscht'); renderAdmin();
+}
+
+
+// ========== DATENPRUEFUNG (Administration) ==========
+const NUM_FIELDS = ['betragMonatlich', 'betragAlle2Monate', 'betragQuartal', 'betragHalbjaehrlich', 'betragJaehrlich'];
+function dataChecks() {
+  const checks = [];
+  const lab = i => i.thema + ' (' + i.konto + ')';
+  const add = (level, title, hint, rows) => { if (rows.length) checks.push({ level, title, hint, rows }); };
+  const expected = [['betragAlle2Monate', 6], ['betragQuartal', 4], ['betragHalbjaehrlich', 2], ['betragJaehrlich', 1]];
+  add('warn', 'Fälligkeitsmonate fehlen', 'Unregelmäßige Beträge ohne Monat erscheinen nicht im Rücklage-Diagramm.',
+    DATA.filter(i => isUnregelmaessig(i) && !parseFM(i).length).map(i => ({ id: i.id, text: lab(i) + ' – ' + getIntervallLabel(i, true) + ', Status ' + i.status })));
+  add('warn', 'Anzahl der Fälligkeitsmonate weicht vom Intervall ab', 'Üblich: alle 2 Monate = 6, quartalsweise = 4, halbjährlich = 2, jährlich = 1. Bewusste Abweichungen sind möglich.',
+    DATA.flatMap(i => { const fm = parseFM(i); const e = expected.find(([f]) => (i[f] || 0) > 0); return (e && fm.length && fm.length !== e[1]) ? [{ id: i.id, text: lab(i) + ' – ' + getIntervallLabel(i, true) + ': ' + fm.length + ' statt ' + e[1] + ' Monate' }] : []; }));
+  const byName = {};
+  DATA.forEach(i => { const k = (i.thema || '').trim().toLowerCase(); (byName[k] = byName[k] || []).push(i); });
+  add('warn', 'Doppelte Namen', 'Gleich benannte Posten sind schwer zu unterscheiden. Eindeutige Namen erleichtern Filter und Diagramme.',
+    Object.values(byName).filter(l => l.length > 1).flat().map(i => ({ id: i.id, text: i.thema + ' – Status ' + i.status + ', ' + i.konto + ', ' + ergebnisVoll(i).toFixed(2) + ' € mtl.' })));
+  add('warn', 'Vertragsnummer beschädigt', 'Tabellenprogramme wandeln lange Zahlen in Exponentialschreibweise um (z. B. 2.65e+25). Die echte Nummer ist dabei verloren und muss neu eingetragen werden.',
+    DATA.filter(i => /^\d+([.,]\d+)?e[+-]?\d+$/i.test(String(i.nummer || '').trim())).map(i => ({ id: i.id, text: lab(i) + ' – ' + i.nummer })));
+  add('warn', 'Kein Betrag hinterlegt', 'Posten mit Status, der in „mtl.“ zählt, aber ohne jeden Betrag.',
+    DATA.filter(i => statusIncluded(i.status) && NUM_FIELDS.every(f => !(i[f] > 0))).map(i => ({ id: i.id, text: lab(i) + ' – Status ' + i.status })));
+  add('info', 'Fälligkeitsmonate ohne unregelmäßigen Betrag', 'Die Monate werden ignoriert, weil der Posten nur monatlich zahlt. Beim Bearbeiten werden sie entfernt.',
+    DATA.filter(i => !isUnregelmaessig(i) && parseFM(i).length).map(i => ({ id: i.id, text: lab(i) + ' – Monate ' + parseFM(i).map(m => MONAT_LABELS[m - 1]).join(', ') })));
+  add('info', 'Mehrere Intervalle gleichzeitig', 'Posten mit Beträgen in mehr als einem Rhythmus (z. B. monatlich und jährlich). Das ist selten gewollt.',
+    DATA.filter(i => NUM_FIELDS.filter(f => i[f] > 0).length > 1).map(i => ({ id: i.id, text: lab(i) + ' – ' + NUM_FIELDS.filter(f => i[f] > 0).map(f => f.replace('betrag', '') + ' ' + i[f].toFixed(2) + ' €').join(', ') })));
+  const unused = [];
+  LOOKUP_TYPES.forEach(t => getLookupsByType(t).forEach(l => { if (!DATA.some(i => i[t] === l.name)) unused.push({ id: null, text: t.charAt(0).toUpperCase() + t.slice(1) + ' „' + l.name + '“ wird von keinem Posten verwendet' }); }));
+  add('info', 'Stammdaten ohne Posten', 'Kategorien, Konten, Zahlarten oder Status ohne Posten. Unter „Kategorien/Konten/…“ in der Administration löschbar.', unused);
+  return checks;
+}
+function renderDataCheck() {
+  const el = document.getElementById('admin-check'); if (!el) return;
+  const checks = dataChecks(), warn = checks.filter(c => c.level === 'warn').reduce((s, c) => s + c.rows.length, 0);
+  let h = '<div class="section-title">🔍 Datenprüfung <span class="badge" style="background:' + (warn ? '#fef3c7;color:#92400e' : '#dcfce7;color:#166534') + '">' + (warn ? warn + ' Hinweise' : 'alles in Ordnung') + '</span></div>' +
+    '<p style="font-size:.8rem;color:var(--muted);margin-bottom:10px">Prüft die geladenen Daten auf typische Probleme. Mit „✏ Bearbeiten“ springst du direkt zum Posten.</p>';
+  if (!checks.length) h += '<p style="font-size:.85rem;color:#166534">✔ Keine Auffälligkeiten gefunden (' + DATA.length + ' Posten geprüft).</p>';
+  checks.forEach(c => {
+    h += '<details class="chk-group"' + (c.level === 'warn' ? ' open' : '') + '><summary>' + (c.level === 'warn' ? '⚠' : 'ℹ') + ' ' + esc(c.title) + ' <span class="badge badge-gekuendigt">' + c.rows.length + '</span></summary>' +
+      '<div style="padding:0 12px 6px;font-size:.76rem;color:var(--muted)">' + esc(c.hint) + '</div>' +
+      c.rows.map(r => '<div class="chk-row"><span class="txt">' + esc(r.text) + '</span>' + (r.id ? '<button class="btn btn-outline btn-sm" data-edit="' + r.id + '">✏ Bearbeiten</button>' : '') + '</div>').join('') + '</details>';
+  });
+  el.innerHTML = h;
+  el.querySelectorAll('[data-edit]').forEach(b => b.addEventListener('click', () => navigateTo('neu', +b.dataset.edit)));
+}
+
+// ========== WAS WAERE WENN (Posten testweise streichen, nichts wird gespeichert) ==========
+const szOff = new Set();
+const szSel = { kategorie: new Set(), konto: new Set() };
+const szCandidates = () => DATA.filter(i => mtlWert(i) > 0);
+const szVisible = () => szCandidates().filter(i => Object.keys(szSel).every(k => !szSel[k].size || szSel[k].has(i[k]))).sort((a, b) => mtlWert(b) - mtlWert(a));
+function szEmpf(items) { const ms = getRolling12(); return ms.reduce((s, m) => s + items.reduce((s2, i) => s2 + effActual(i, m.month), 0), 0) / 12; }
+function renderSzenario() {
+  const ff = document.getElementById('sz-filters'); ff.innerHTML = '';
+  [['Kategorie', 'kategorie'], ['Konto', 'konto']].forEach(([label, key]) => {
+    const colors = getColorMap(key);
+    const opts = [...new Set(szCandidates().map(i => i[key]).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'de'));
+    ff.appendChild(createMsel({ label, emptyMeansAll: true, options: opts.map(o => ({ value: o, color: colors[o] })), selected: szSel[key], onChange: updateSzenario }));
+  });
+  const mk = (txt, fn) => { const b = document.createElement('button'); b.className = 'btn btn-outline btn-sm'; b.textContent = txt; b.addEventListener('click', fn); ff.appendChild(b); };
+  mk('Alle sichtbaren streichen', () => { szVisible().forEach(i => szOff.add(i.id)); updateSzenario(); });
+  mk('↺ Zurücksetzen', () => { szOff.clear(); updateSzenario(); });
+  updateSzenario();
+}
+function updateSzenario() {
+  const cand = szCandidates(), vis = szVisible();
+  [...szOff].forEach(id => { if (!cand.some(i => i.id === id)) szOff.delete(id); });
+  const cur = cand.reduce((s, i) => s + mtlWert(i), 0), saved = cand.filter(i => szOff.has(i.id)).reduce((s, i) => s + mtlWert(i), 0);
+  document.getElementById('sz-summary').innerHTML = [
+    kpiCard('Aktuell (mtl.)', cur.toFixed(2) + ' €', cand.length + ' Posten in der Berechnung'),
+    kpiCard('Nach Streichung (mtl.)', (cur - saved).toFixed(2) + ' €', (cand.length - szOff.size) + ' Posten bleiben'),
+    kpiCard('Ersparnis pro Monat', saved.toFixed(2) + ' €', szOff.size + ' Posten gestrichen'),
+    kpiCard('Ersparnis pro Jahr', (saved * 12).toFixed(2) + ' €', '12 × monatlich'),
+  ].join('');
+  const tbl = document.getElementById('sz-table'), allOn = vis.length > 0 && vis.every(i => szOff.has(i.id));
+  tbl.querySelector('thead').innerHTML = '<tr><th style="width:90px"><label style="cursor:pointer"><input type="checkbox" id="sz-all"' + (allOn ? ' checked' : '') + '> streichen</label></th><th>Thema</th><th>Kategorie</th><th>Konto</th><th>Intervall</th><th class="text-right">mtl.</th></tr>';
+  tbl.querySelector('tbody').innerHTML = vis.map(i => '<tr class="' + (szOff.has(i.id) ? 'sz-off' : '') + '"><td><input type="checkbox" data-sz="' + i.id + '"' + (szOff.has(i.id) ? ' checked' : '') + '></td><td>' + esc(i.thema) + '</td>' +
+    '<td><span class="dot" style="background:' + getLookupColor('kategorie', i.kategorie) + '"></span>' + esc(i.kategorie) + '</td><td><span class="dot" style="background:' + getLookupColor('konto', i.konto) + '"></span>' + esc(i.konto) + '</td>' +
+    '<td>' + getIntervallLabel(i) + '</td><td class="text-right font-mono">' + mtlWert(i).toFixed(2) + ' €</td></tr>').join('') ||
+    '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:16px">Keine Posten für diese Filter.</td></tr>';
+  tbl.querySelectorAll('input[data-sz]').forEach(cb => cb.addEventListener('change', () => { const id = +cb.dataset.sz; if (cb.checked) szOff.add(id); else szOff.delete(id); updateSzenario(); }));
+  const all = document.getElementById('sz-all');
+  if (all) all.addEventListener('change', () => { vis.forEach(i => { if (all.checked) szOff.add(i.id); else szOff.delete(i.id); }); updateSzenario(); });
+  // Auswirkung je Konto auf den empfohlenen Ueberweisungsbetrag (rechnerischer Durchschnitt ueber 12 Monate)
+  const konten = [...new Set(cand.map(i => i.konto).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'de'));
+  let t = '<table><thead><tr><th>Konto</th><th class="text-right">Aktuell</th><th class="text-right">Mit Streichung</th><th class="text-right">Differenz</th></tr></thead><tbody>', sumA = 0, sumB = 0;
+  konten.forEach(k => {
+    const items = DATA.filter(i => i.konto === k), a = szEmpf(items), b = szEmpf(items.filter(i => !szOff.has(i.id))); sumA += a; sumB += b;
+    t += '<tr><td><span class="dot" style="background:' + getLookupColor('konto', k) + '"></span>' + esc(k) + '</td><td class="text-right font-mono">' + a.toFixed(2) + ' €</td><td class="text-right font-mono">' + b.toFixed(2) + ' €</td>' +
+      '<td class="text-right font-mono" style="' + (a - b > 0.005 ? 'color:var(--success);font-weight:700' : 'color:var(--muted)') + '">' + (a - b > 0.005 ? '−' + (a - b).toFixed(2) + ' €' : '–') + '</td></tr>';
+  });
+  document.getElementById('sz-konto').innerHTML = t + '<tr class="total-row"><td>Gesamt</td><td class="text-right font-mono">' + sumA.toFixed(2) + ' €</td><td class="text-right font-mono">' + sumB.toFixed(2) + ' €</td><td class="text-right font-mono">' + (sumA - sumB > 0.005 ? '−' + (sumA - sumB).toFixed(2) + ' €' : '–') + '</td></tr></tbody></table>';
 }
 
 // ========== HELPERS ==========
